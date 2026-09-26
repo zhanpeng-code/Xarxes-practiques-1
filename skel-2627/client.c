@@ -47,6 +47,11 @@ int main(int argc, char *argv[]) {
 
 	// Crear el socket
 	// Afegiu comentari explicant els arguments, i de quines altres opcions hi ha
+	// AF_INET: indica que utilitzarem adreces IPv4.
+	// SOCK_STREAM: indica que utilitzarem un socket orientat a connexió (TCP).
+	// Una altra opció seria SOCK_DGRAM, que correspon a UDP.
+	// 0: deixa que el sistema seleccioni automàticament el protocol adequat
+	//    per a la combinació AF_INET + SOCK_STREAM.
 	// per al segon d'ells (ara SOCK_STREAM)
 	
 	if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
