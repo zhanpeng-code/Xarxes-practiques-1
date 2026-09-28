@@ -46,7 +46,7 @@ int main(int argc, char *argv[]) {
 
 
 	// Crear el socket
-	// jjjjjjjjntari explicant els arguments, i de quines altres opcions hi ha
+	// Afegiu comentari explicant els arguments, i de quines altres opcions hi ha
 	// AF_INET: indica que utilitzarem adreces IPv4.
 	// SOCK_STREAM: indica que utilitzarem un socket orientat a connexió (TCP).
 	// Una altra opció seria SOCK_DGRAM, que correspon a UDP.
@@ -63,6 +63,12 @@ int main(int argc, char *argv[]) {
 	// per què s'utilitzen els valors que hi ha,
 	// i per què s'utilitza htons()
 
+	// Configurar l'adreça del servidor.
+	// sin_family: família d'adreces utilitzada
+	// sin_port: port del servidor en format de xarxa (network byte order).
+	// htons() converteix el port del format de l'ordinador al format de xarxa.
+	// sin_addr: adreça IPv4 del servidor, que es converteix a format binari amb inet_pton().
+
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_port = htons(port);
 	inet_pton(AF_INET, domini, &serv_addr.sin_addr);	// Convertir adreça IPv4 a binari
@@ -70,6 +76,10 @@ int main(int argc, char *argv[]) {
 
 	// Connectar amb el servidor
 	// Afegiu comentari explicant els arguments
+	// sock: descriptor del socket que volem utilitzar.
+	// (struct sockaddr *)&serv_addr: adreça del servidor,
+	// convertida al tipus genèric struct sockaddr *.
+	// sizeof(serv_addr): mida de l'estructura que conté l'adreça.
 	if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
 		printf("\nConnexio fallida\n");
 		return -1;
@@ -115,16 +125,48 @@ int main(int argc, char *argv[]) {
 			// Enviar missatge al servidor
 			// Afegiu control d'errors
 			// Afegiu comentari explicant els arguments
+			
+			// sock: socket pel qual enviem les dades.
+			// cadena: dades que volem enviar.
+			// strlen(cadena): nombre de bytes que volem enviar.
+			// 0: flags per defecte.
 
-			send(sock, cadena, strlen(cadena), 0);
+
+			if (send(sock, cadena, strlen(cadena), 0) < 0) {
+    			perror("Error en enviar el missatge");
+    			close(sock);
+    			return -1;
+			}
 
 			// Llegir resposta del servidor
 			// Afegiu un control d'errors al recv()
 			// Afegiu comentari explicant què fa i per què s'utilitza memset
+			//		Netejar el buffer abans de rebre una nova resposta.
+			//		Això posa tots els bytes del buffer a 0 i evita conservar dades de la resposta anterior.
 			// Afegiu comentari explicant els arguments de la crida a recv()
 
 			memset(buffer, 0, BUFFER_SIZE);
+
+			// Rebre la resposta del servidor.
+			// sock: socket pel qual rebem les dades.
+			// buffer: memòria on guardarem les dades rebudes.
+			// BUFFER_SIZE: nombre màxim de bytes que podem rebre.
+			// 0: flags per defecte.
+
 			recv(sock, buffer, BUFFER_SIZE,0);
+			
+			if (bytes_received < 0) {
+    			perror("Error en rebre la resposta");
+    			close(sock);
+    			return -1;
+				}
+
+			if (bytes_received == 0) {
+   				printf("El servidor ha tancat la connexió.\n");
+    			close(sock);
+    			return 0;
+				}
+				
 			printf("Resposta del servidor: %s\n", buffer);
 
 			if (strcmp(cadena, "EXIT") == 0) {
