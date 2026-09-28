@@ -8,6 +8,18 @@
 
 #define DEFAULT_PORT 8080
 #define BUFFER_SIZE 1024
+#define MAX_TODOS 100
+#define TODO_SIZE 256
+
+typedef struct {
+    int id;
+    char text[TODO_SIZE];
+    int completed;
+} Todo;
+
+Todo todos[MAX_TODOS];
+int todo_count = 0;
+
 
 int main(int argc, char *argv[]) {
 	int sock, new_socket;
@@ -153,6 +165,127 @@ int main(int argc, char *argv[]) {
 
 			// Aquí haureu d'implementar l'anàlisi de la cadena rebuda per saber l'operació,
 			// i si n'hi ha els arguments, executar-la i tornar el(s) resultat(s)
+			 if (strncmp(buffer, "ADD|", 4) == 0) {
+
+    if (todo_count >= MAX_TODOS) {
+        send(new_socket, "Error: massa tasques\n", 21, 0);
+    } else {
+
+        todos[todo_count].id = todo_count + 1;
+
+        strcpy(todos[todo_count].text, buffer + 4);
+
+        todos[todo_count].completed = 0;
+
+        char resposta[BUFFER_SIZE];
+
+        snprintf(resposta, BUFFER_SIZE,
+                 "Tasca afegida: %d - %s\n",
+                 todos[todo_count].id,
+                 todos[todo_count].text);
+
+        todo_count++;
+
+        send(new_socket, resposta, strlen(resposta), 0);
+    }
+}else if (strncmp(buffer, "DELETE|", 7) == 0) {
+
+    int id = atoi(buffer + 7);
+
+    int found = 0;
+
+    for (int i = 0; i < todo_count; i++) {
+
+        if (todos[i].id == id) {
+
+            found = 1;
+
+            // 把后面的任务往前移动
+            for (int j = i; j < todo_count - 1; j++) {
+                todos[j] = todos[j + 1];
+            }
+
+            todo_count--;
+
+            send(new_socket,
+                 "Tasca eliminada\n",
+                 strlen("Tasca eliminada\n"),
+                 0);
+
+            break;
+        }
+    }
+
+    if (!found) {
+        send(new_socket,
+             "Error: tasca no trobada\n",
+             strlen("Error: tasca no trobada\n"),
+             0);
+    }
+}else if (strcmp(buffer, "LIST") == 0) {
+
+    char resposta[BUFFER_SIZE];
+
+    if (todo_count == 0) {
+
+        strcpy(resposta, "No hi ha tasques.\n");
+
+        send(new_socket,
+             resposta,
+             strlen(resposta),
+             0);
+
+    } else {
+
+        resposta[0] = '\0';
+
+        for (int i = 0; i < todo_count; i++) {
+
+            char temp[TODO_SIZE + 100];
+
+            snprintf(temp, sizeof(temp),
+                     "%d. %s [%s]\n",
+                     todos[i].id,
+                     todos[i].text,
+                     todos[i].completed ? "Fet" : "Pendent");
+
+            strcat(resposta, temp);
+        }
+
+        send(new_socket,
+             resposta,
+             strlen(resposta),
+             0);
+    }
+}else if (strncmp(buffer, "DONE|", 5) == 0) {
+
+    int id = atoi(buffer + 5);
+
+    int found = 0;
+
+    for (int i = 0; i < todo_count; i++) {
+
+        if (todos[i].id == id) {
+
+            todos[i].completed = 1;
+            found = 1;
+
+            send(new_socket,
+                 "Tasca marcada com a feta\n",
+                 strlen("Tasca marcada com a feta\n"),
+                 0);
+
+            break;
+        }
+    }
+
+    if (!found) {
+        send(new_socket,
+             "Error: tasca no trobada\n",
+             strlen("Error: tasca no trobada\n"),
+             0);
+    }
+}
 
 			// A continuació hi ha el codi corresponent a l'opció d'Enviar missatge, amb el retorn d'una cadena fixa,
 			// i la de Sortida de la connexió/bucle si és el cas.
