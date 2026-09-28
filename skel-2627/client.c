@@ -100,10 +100,10 @@ int main(int argc, char *argv[]) {
 
 		printf("Menú principal:\n");
 		printf("1. Enviar missatge\n");
-		printf("2. Opció 2\n");
-		printf("3. Opció 3\n");
-		printf("4. Opció 4\n");
-		printf("5. Opció 5\n");
+		printf("2. Afegir tasca\n");
+		printf("3. Eliminar tasca\n");
+		printf("4. Veure tasques\n");
+		printf("5. Modificar estat de tasca\n");
 		printf("6. Sortir\n");
 		printf("Opció: ");
 
@@ -175,21 +175,108 @@ int main(int argc, char *argv[]) {
 			}
 			break;
 
-		case 2:
-			// Implementar Opció 2
-			break;
+	case 2: {
 
-		case 3:
-			// Implementar Opció 3
-			break;
+    printf("Introdueix la tasca: ");
 
-		case 4:
-			// Implementar Opció 4
-			break;
+    fgets(cadena, BUFFER_SIZE, stdin);
+    cadena[strcspn(cadena, "\n")] = '\0';
 
-		case 5:
-			// Implementar Opció 5
-			break;
+    snprintf(buffer, BUFFER_SIZE, "ADD|%s", cadena);
+
+    if (send(sock, buffer, strlen(buffer), 0) < 0) {
+        perror("Error en enviar");
+        break;
+    }
+
+    memset(buffer, 0, BUFFER_SIZE);
+
+    if (recv(sock, buffer, BUFFER_SIZE - 1, 0) <= 0) {
+        printf("Error en rebre resposta\n");
+        break;
+    }
+
+    printf("Resposta del servidor: %s", buffer);
+
+    break;
+}
+
+		case 3: {
+
+    int id;
+
+    printf("Introdueix l'ID de la tasca: ");
+    scanf("%d", &id);
+    while (getchar() != '\n');
+
+    snprintf(buffer, BUFFER_SIZE, "DELETE|%d", id);
+
+    if (send(sock, buffer, strlen(buffer), 0) < 0) {
+        perror("Error en enviar");
+        break;
+    }
+
+    memset(buffer, 0, BUFFER_SIZE);
+
+    if (recv(sock, buffer, BUFFER_SIZE - 1, 0) <= 0) {
+        printf("Error en rebre resposta\n");
+        break;
+    }
+
+    printf("Resposta del servidor: %s", buffer);
+
+    break;
+}
+
+		case 4: {
+
+    strcpy(buffer, "LIST");
+
+    if (send(sock, buffer, strlen(buffer), 0) < 0) {
+        perror("Error en enviar");
+        break;
+    }
+
+    memset(buffer, 0, BUFFER_SIZE);
+
+    if (recv(sock, buffer, BUFFER_SIZE - 1, 0) <= 0) {
+        printf("Error en rebre resposta\n");
+        break;
+    }
+
+    printf("\n===== TODO LIST =====\n");
+    printf("%s", buffer);
+    printf("=====================\n");
+
+    break;
+}
+
+		case 5: {
+
+    int id;
+
+    printf("Introdueix l'ID de la tasca: ");
+    scanf("%d", &id);
+    while (getchar() != '\n');
+
+    snprintf(buffer, BUFFER_SIZE, "DONE|%d", id);
+
+    if (send(sock, buffer, strlen(buffer), 0) < 0) {
+        perror("Error en enviar");
+        break;
+    }
+
+    memset(buffer, 0, BUFFER_SIZE);
+
+    if (recv(sock, buffer, BUFFER_SIZE - 1, 0) <= 0) {
+        printf("Error en rebre resposta\n");
+        break;
+    }
+
+    printf("Resposta del servidor: %s", buffer);
+
+    break;
+}
 
 		default:
 			printf("Opció invàlida\n");
