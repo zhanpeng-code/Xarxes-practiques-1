@@ -153,20 +153,24 @@ int main(int argc, char *argv[]) {
 			// BUFFER_SIZE: nombre màxim de bytes que podem rebre.
 			// 0: flags per defecte.
 
-			recv(sock, buffer, BUFFER_SIZE,0);
-			
-			if (bytes_received < 0) {
-    			perror("Error en rebre la resposta");
-    			close(sock);
-    			return -1;
-				}
+			int bytes_received;
 
-			if (bytes_received == 0) {
-   				printf("El servidor ha tancat la connexió.\n");
-    			close(sock);
-    			return 0;
-				}
-				
+		bytes_received = recv(sock, buffer, BUFFER_SIZE - 1, 0);
+
+		if (bytes_received < 0) {
+		    	perror("Error en rebre la resposta");
+		   		close(sock);
+		    	return -1;
+		}
+
+		if (bytes_received == 0) {
+		    printf("El servidor ha tancat la connexió.\n");
+		    close(sock);
+		    return 0;
+		}
+
+			buffer[bytes_received] = '\0';
+		
 			printf("Resposta del servidor: %s\n", buffer);
 
 			if (strcmp(cadena, "EXIT") == 0) {
