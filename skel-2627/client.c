@@ -186,7 +186,7 @@ int main(int argc, char *argv[]) {
     fgets(cadena, BUFFER_SIZE, stdin);
     cadena[strcspn(cadena, "\n")] = '\0';
 
-    snprintf(buffer, BUFFER_SIZE, "ADD|%s", cadena);
+    snprintf(buffer, BUFFER_SIZE, "ADD|%.*s", BUFFER_SIZE - 5, cadena);
 
     if (send(sock, buffer, strlen(buffer), 0) < 0) {
         perror("Error en enviar");
