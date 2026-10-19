@@ -5,11 +5,13 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <errno.h>
+#include <signal.h>
 
 #define DEFAULT_PORT 8080
-#define BUFFER_SIZE 1024
+#define BUFFER_SIZE 2048
 #define MAX_TODOS 100
-#define TODO_SIZE 256
+#define TODO_SIZE 2048
+
 
 typedef struct {
     int id;
@@ -59,7 +61,7 @@ int main(int argc, char *argv[]) {
 	// Una altra opció és SOCK_DGRAM, utilitzat per UDP.
 	// 0: indica que volem utilitzar el protocol per defecte associat a AF_INET i SOCK_STREAM.
 	
-	if ((sock = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
+	if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
 		perror("Error en crear el socket");
 		exit(EXIT_FAILURE);
 	}
@@ -83,6 +85,8 @@ int main(int argc, char *argv[]) {
 	// sin_port:
 	// Indica el port TCP on escoltarà el servidor.
 	// htons() converteix el número de port al network byte order.
+
+	memset(&address, 0, sizeof(address));
 
 	address.sin_family = AF_INET;
 	address.sin_addr.s_addr = htonl(INADDR_ANY);	// Per a INADDR_ANY no faria falta htonl(), però li posem per coherència
@@ -125,6 +129,9 @@ int main(int argc, char *argv[]) {
 		exit(EXIT_FAILURE);
 	}
 
+	// Evitar processos zombis quan els fills acabin
+	signal(SIGCHLD, SIG_IGN);
+
 	printf("Servidor en funcionament, esperant connexions...\n");
 
 	while (1) {
@@ -148,196 +155,222 @@ int main(int argc, char *argv[]) {
 	// sock continua sent el socket d'escolta i es manté disponible
 	// per acceptar noves connexions.
 		
+		addrlen = sizeof(address);
+
 		if ((new_socket = accept(sock, (struct sockaddr *)&address, (socklen_t *)&addrlen)) < 0) {
+			if (errno == EINTR) {
+				continue;
+			}
+
 			perror("Error en acceptar la connexió");
-			close(sock);
-			exit(EXIT_FAILURE);
+			continue;
 		}
 
-		 while (1) {
+		pid_t pid = fork();
+
+		if (pid < 0) {
+			perror("Error en crear el procés fill");
+			close(new_socket);
+			continue;
+		}
+
+		if (pid > 0) {
+			close(new_socket);
+			continue;
+		}
+
+		close(sock);
+
+		while (1) {
 			memset(buffer, 0, BUFFER_SIZE);
 			
 			// Llegir missatge del client
-			if (recv(new_socket, buffer, BUFFER_SIZE, 0) <= 0) {
+			ssize_t bytes_received = recv(new_socket, buffer, BUFFER_SIZE - 1, 0);
+
+			if (bytes_received <= 0) {
 				printf("Client desconnectat (PID: %d)\n", getpid());
 				break;
 			}
 
+			buffer[bytes_received] = '\0';
+
 			// Aquí haureu d'implementar l'anàlisi de la cadena rebuda per saber l'operació,
 			// i si n'hi ha els arguments, executar-la i tornar el(s) resultat(s)
 			printf("Missatge rebut del client (PID: %d): %s\n",
-       getpid(), buffer);
+			       getpid(), buffer);
 
 
-/* Sortir */
-if (strcmp(buffer, "EXIT") == 0) {
+			/* Sortir */ 
+			if (strcmp(buffer, "EXIT") == 0) {
 
-    printf("Tancant connexió amb el client (PID: %d)...\n",
-           getpid());
+				printf("Tancant connexió amb el client (PID: %d)...\n",
+				       getpid());
 
-    send(new_socket,
-         "Connexió tancada\n",
-         strlen("Connexió tancada\n"),
-         0);
+				send(new_socket,
+				     "Connexió tancada\n",
+				     strlen("Connexió tancada\n"),
+				     0);
 
-    break;
-}
-
-
-/* Afegir tasca */
-else if (strncmp(buffer, "ADD|", 4) == 0) {
-
-    if (todo_count >= MAX_TODOS) {
-
-        char *resposta = "Error: massa tasques\n";
-
-        send(new_socket,
-             resposta,
-             strlen(resposta),
-             0);
-
-    } else {
-
-        todos[todo_count].id = todo_count + 1;
-
-        strcpy(todos[todo_count].text, buffer + 4);
-
-        todos[todo_count].completed = 0;
-
-        char resposta[BUFFER_SIZE];
-
-        snprintf(resposta,
-                 BUFFER_SIZE,
-                 "Tasca afegida: %d - %s\n",
-                 todos[todo_count].id,
-                 todos[todo_count].text);
-
-        todo_count++;
-
-        send(new_socket,
-             resposta,
-             strlen(resposta),
-             0);
-    }
-}
+				break;
+			}
 
 
-/* Eliminar tasca */
-else if (strncmp(buffer, "DELETE|", 7) == 0) {
+			/* Afegir tasca */
+			else if (strncmp(buffer, "ADD|", 4) == 0) {
 
-    int id = atoi(buffer + 7);
-    int found = 0;
+				if (todo_count >= MAX_TODOS) {
 
-    for (int i = 0; i < todo_count; i++) {
+					char *resposta = "Error: massa tasques\n";
 
-        if (todos[i].id == id) {
+					send(new_socket,
+					     resposta,
+					     strlen(resposta),
+					     0);
 
-            found = 1;
+				} else {
 
-            for (int j = i; j < todo_count - 1; j++) {
-                todos[j] = todos[j + 1];
-            }
+					todos[todo_count].id = todo_count + 1;
 
-            todo_count--;
+					strcpy(todos[todo_count].text, buffer + 4);
 
-            send(new_socket,
-                 "Tasca eliminada\n",
-                 strlen("Tasca eliminada\n"),
-                 0);
+					todos[todo_count].completed = 0;
 
-            break;
-        }
-    }
+					char resposta[BUFFER_SIZE];
 
-    if (!found) {
+					snprintf(resposta,
+					         BUFFER_SIZE,
+					         "Tasca afegida: %d - %s\n",
+					         todos[todo_count].id,
+					         todos[todo_count].text);
 
-        send(new_socket,
-             "Error: tasca no trobada\n",
-             strlen("Error: tasca no trobada\n"),
-             0);
-    }
-}
+					todo_count++;
 
-
-/* Veure tasques */
-else if (strcmp(buffer, "LIST") == 0) {
-
-    char resposta[BUFFER_SIZE];
-
-    resposta[0] = '\0';
-
-    if (todo_count == 0) {
-
-        strcpy(resposta, "No hi ha tasques.\n");
-
-    } else {
-
-        for (int i = 0; i < todo_count; i++) {
-
-            char temp[TODO_SIZE + 100];
-
-            snprintf(temp,
-                     sizeof(temp),
-                     "%d. %s [%s]\n",
-                     todos[i].id,
-                     todos[i].text,
-                     todos[i].completed ? "Fet" : "Pendent");
-
-            strcat(resposta, temp);
-        }
-    }
-
-    send(new_socket,
-         resposta,
-         strlen(resposta),
-         0);
-}
+					send(new_socket,
+					     resposta,
+					     strlen(resposta),
+					     0);
+				}
+			}
 
 
-/* Modificar estat */
-else if (strncmp(buffer, "DONE|", 5) == 0) {
+			/* Eliminar tasca */
+			else if (strncmp(buffer, "DELETE|", 7) == 0) {
 
-    int id = atoi(buffer + 5);
-    int found = 0;
+				int id = atoi(buffer + 7);
+				int found = 0;
 
-    for (int i = 0; i < todo_count; i++) {
+				for (int i = 0; i < todo_count; i++) {
 
-        if (todos[i].id == id) {
+					if (todos[i].id == id) {
 
-            todos[i].completed = !todos[i].completed;
+						found = 1;
 
-            found = 1;
+						for (int j = i; j < todo_count - 1; j++) {
+							todos[j] = todos[j + 1];
+						}
 
-            send(new_socket,
-                 "Estat de la tasca modificat\n",
-                 strlen("Estat de la tasca modificat\n"),
-                 0);
+						todo_count--;
 
-            break;
-        }
-    }
+						send(new_socket,
+						     "Tasca eliminada\n",
+						     strlen("Tasca eliminada\n"),
+						     0);
 
-    if (!found) {
+						break;
+					}
+				}
 
-        send(new_socket,
-             "Error: tasca no trobada\n",
-             strlen("Error: tasca no trobada\n"),
-             0);
-    }
-}
+				if (!found) {
+
+					send(new_socket,
+					     "Error: tasca no trobada\n",
+					     strlen("Error: tasca no trobada\n"),
+					     0);
+				}
+			}
 
 
-/* Missatge normal */
-else {
+			/* Veure tasques */
+			else if (strcmp(buffer, "LIST") == 0) {
 
-    send(new_socket,
-         "Missatge rebut\n",
-         strlen("Missatge rebut\n"),
-         0);
-}
+				char resposta[BUFFER_SIZE];
+
+				resposta[0] = '\0';
+
+				if (todo_count == 0) {
+
+					strcpy(resposta, "No hi ha tasques.\n");
+
+				} else {
+
+					for (int i = 0; i < todo_count; i++) {
+
+						char temp[TODO_SIZE + 100];
+
+						snprintf(temp,
+						         sizeof(temp),
+						         "%d. %s [%s]\n",
+						         todos[i].id,
+						         todos[i].text,
+						         todos[i].completed ? "Fet" : "Pendent");
+
+						strcat(resposta, temp);
+					}
+				}
+
+				send(new_socket,
+				     resposta,
+				     strlen(resposta),
+				     0);
+			}
+
+
+			/* Modificar estat */
+			else if (strncmp(buffer, "DONE|", 5) == 0) {
+
+				int id = atoi(buffer + 5);
+				int found = 0;
+
+				for (int i = 0; i < todo_count; i++) {
+
+					if (todos[i].id == id) {
+
+						todos[i].completed = !todos[i].completed;
+
+						found = 1;
+
+						send(new_socket,
+						     "Estat de la tasca modificat\n",
+						     strlen("Estat de la tasca modificat\n"),
+						     0);
+
+						break;
+					}
+				}
+
+				if (!found) {
+
+					send(new_socket,
+					     "Error: tasca no trobada\n",
+					     strlen("Error: tasca no trobada\n"),
+					     0);
+				}
+			}
+
+
+			/* Missatge normal */
+			else {
+
+				send(new_socket,
+				     "Missatge rebut\n",
+				     strlen("Missatge rebut\n"),
+				     0);
+			}
 		}
 
 		close(new_socket); // Tancar la connexió amb el client
+
+		exit(EXIT_SUCCESS);
 	}
 
 	close(sock);
